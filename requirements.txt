@@ -1,0 +1,12 @@
+# Track 1 — Noise Event Detection (Kaggle GPU baselines)
+torch
+datasets
+transformers
+soundfile
+librosa
+jiwer
+numpy
+scipy
+tqdm
+scikit-learn
+huggingface-hub
