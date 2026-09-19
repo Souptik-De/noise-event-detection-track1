@@ -73,14 +73,18 @@ def write_submission(model, device, thr, med, min_dur, gate,
     print(f"{n} lines ({empty} with no events) -> {zip_path}")
 
 
-def run(budget=BUDGET, hf_token=None, do_submission=False):
-    """Full pipeline. Returns (best_state, best_postproc_params)."""
+def run(budget=BUDGET, hf_token=None, do_submission=False, train_limit=None):
+    """Full pipeline. Returns (best_state, best_postproc_params).
+
+    `train_limit` overrides the budget default (fast: 100, full: None);
+    per-tier caps are tightened to just above it (see budget_settings).
+    """
     seed_everything()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     data.seed_torch()
 
     max_per_quality, stage1_epochs, stage2_epochs, t1_bs, train_limit = \
-        budget_settings(budget)
+        budget_settings(budget, train_limit)
 
     # --- data ---
     raw = data.load_stream(hf_token)
