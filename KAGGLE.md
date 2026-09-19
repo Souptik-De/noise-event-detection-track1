@@ -22,14 +22,9 @@ is already Kaggle-native. No Colab shim needed (`WORK=/kaggle/working`).
 
 ## 3. Run (v3 fast smoke first)
 
-Option 1 — notebook: Run All. `BUDGET="fast"` caps ~6k/6k/2k clips, 3+8 epochs.
-Option 2 — script:
-```bash
-pip install -q -r requirements.txt
-python kaggle_run_v3.py --budget fast
-# full run later:
-python kaggle_run_v3.py --budget full --submit
-```
+Use **Save & Run All (Commit)** to run (`Quick Save` only saves, does not run).
+`kaggle/run_v3.ipynb` is self-contained: cell 1 writes the 8 v3 modular files,
+then trains with `BUDGET="fast"` (~6k/6k/2k clips, 3+8 epochs).
 
 Dataset streams (`streaming=True`, `Audio(decode=False)`) — no manual download;
 it stops once per-tier caps are met.
