@@ -26,3 +26,46 @@
 - Postproc sweep on best ckpt: **Combined 0.818 / 2.0 (Event-F1 0.247,
   Dice 0.571)**, best `thr=0.7 med=15 min_dur=0.12 gate=0.7`.
 - Checkpoint: `outputs/t1_wavlm_2000.pt` (332MB, git-ignored, local only).
+
+## Tier 0 — no-retraining checks (2026-09-19, kernel `souptikde/track1-t0-tier0`)
+
+- **T0.2 audit (keep):** `outputs/t1_wavlm_2000.pt` contains
+  `which: student, score: 0.6808`, postproc `(0.7, 15, 0.12, 0.7)`. `train.py`
+  saves whichever of student/teacher has higher val Combined and `main.py`
+  reloads `ck["model"]` verbatim — no hardcoded teacher export. v2's
+  "teacher at inference" convention is NOT inherited. Correct as-is.
+- **T0.1 extended sweep (negative — keep Run B params):** regenerated Run B
+  val posteriors from the ckpt (same seed/caps/split, 203 clips) on Kaggle
+  GPU. Original grid point reproduced exactly (0.8184 / F1 0.2471 /
+  Dice 0.5713). Extended grid thr ∈ {0.7…0.95} × min_dur ∈
+  {0.05,0.12,0.25,0.3,0.4} (720 configs): EXT-BEST identical to original
+  `(0.8184, 0.7, 15, 0.12, 0.7)`. Higher thr only trades recall — optimum
+  confirmed, no change. Posteriors saved as `t0_posteriors.npz` (kernel output).
+- **T0.3 submission dry-run (pass):** `export_track1` on 50 held-out train
+  clips with Run B params → `dryrun_submission.zip` validated: single
+  `predictions.jsonl` at zip root, 50/50 unique clip_ids, 2 silent clips with
+  `events: []`, all events `{onset, offset}` with 0 ≤ onset < offset.
+  Submission path works end-to-end (real test set still untested).
+
+## Tier 1.1 — ema_decay ablation, rampup=5 (2026-09-19, kernel `souptikde/track1-t1-ema`)
+
+One Commit, streamed once, 3 configs back-to-back on identical loaders
+(train 2000 / val 203), 3+8 epochs each. Separate ckpts `t1_t11_*.pt`.
+
+| config | ckpt val (pre-sweep) | teacher final | sweep Combined | F1 | Dice | postproc |
+|---|---|---|---|---|---|---|
+| Run B ref (0.999) | 0.6808 stu | 0.5860 | 0.8184 | 0.247 | 0.571 | (0.7,15,0.12,0.7) |
+| base repeat (0.999) | 0.5886 stu | 0.5314 | 0.8070 | 0.224 | 0.583 | (0.7,21,0.12,0.7) |
+| ema99 (0.99) | 0.6813 stu | **0.6788** | 0.8063 | 0.225 | 0.581 | (0.7,3,0.12,0.7) |
+| ema995 (0.995) | 0.6624 stu | 0.6452 | 0.8106 | 0.223 | 0.588 | (0.7,5,0.25,0.7) |
+
+- **Run-to-run variance ≈ 0.011** (base repeat 0.8070 vs Run B 0.8184, same
+  data/loaders — init/shuffle noise). Deltas < ~0.015 not trustworthy.
+- **Hypothesis half-confirmed:** decay 0.99 closes the teacher gap
+  (0.095 → 0.003; many `saved teacher` lines) but does **not** improve val
+  Combined (0.8063 vs 0.8184 ref / 0.8070 repeat — all within noise).
+- **Decision: DISCARD for Combined (keep decay=0.999).** Skip rampup 8/12
+  follow-up — no Combined signal to amplify; revisit only if Tier 2 changes
+  consistency dynamics. Teacher-quality finding banked (useful if we ever
+  switch to teacher-at-inference).
+- Kept locally: `outputs/t1_t11_ema99.pt` (teacher-competitive ckpt).

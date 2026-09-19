@@ -39,6 +39,9 @@ CFG = dict(
     max_cons_w=2.0,       # max consistency weight after ramp-up
     rampup_epochs=5,      # consistency ramp-up length in epochs
     pos_weight=4.0,       # up-weight rare noise frames in BCE
+    cat_w=1.0,              # weight of auxiliary category channels 1..7 in
+                            # l_strong/l_weak (ch0 any-noise always 1.0).
+                            # 1.0 = current behaviour; ablate with 0.5 / 0.0.
     mixup_prob=0.5,       # probability of applying mixup to a batch
     mixup_alpha=0.2,      # Beta(alpha, alpha) mixing coefficient
     val_frac=0.1,         # 10% of gold clips held out for validation

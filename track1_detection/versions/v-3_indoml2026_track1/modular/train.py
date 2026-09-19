@@ -63,13 +63,19 @@ def run_epochs(stu, tea, opt, sched, epochs, scaler, train_dl, val_dl, device,
             f_s = f_s.float().clamp(1e-6, 1 - 1e-6)
             c_s = c_s.float().clamp(1e-6, 1 - 1e-6)
 
+            # Channel weights: ch0 (graded any-noise) always 1.0; CFG["cat_w"]
+            # scales auxiliary category channels 1..7 (T1.2 ablation).
+            # l_cons intentionally unweighted (alignment, not supervision).
+            chw = torch.ones(lab.shape[1], device=lab.device)
+            chw[1:] = CFG["cat_w"]
+
             # l_strong: per-frame BCE averaged over valid frames, then a weighted mean
             # over only timestamped clips (`* strong` zeros Bronze, `* w` weights gold/silver).
-            ls = (bce_pos(f_s, lab) * m3).sum(dim=(1, 2)) / (m3.sum(dim=(1, 2)) * lab.shape[1] + 1e-6)
+            ls = (bce_pos(f_s, lab) * chw.view(1, -1, 1) * m3).sum(dim=(1, 2)) / (m3.sum(dim=(1, 2)) * lab.shape[1] + 1e-6)
             l_strong = (ls * strong * w).sum() / (strong * w).sum().clamp(min=1e-6)
 
             # l_weak: clip-tag BCE on the attention-pooled prob (all tiers -> Bronze in).
-            l_weak = bce_pos(c_s, tags).mean()
+            l_weak = (bce_pos(c_s, tags) * chw.view(1, -1)).mean()
 
             # l_cons: frame + clip MSE between student and teacher (tier-agnostic).
             f_t, c_t = f_t.float(), c_t.float()
