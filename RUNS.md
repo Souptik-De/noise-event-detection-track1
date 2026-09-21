@@ -151,5 +151,22 @@ joining stage 2 at 0.1× head LR.
   drowning failure of attempt 1.
 - Kept locally: `outputs/t1_t21v2_cnn_2500.pt` (336MB — extra CNN params).
 
-### T2.2v2 — edge loss auto-calibrated (running at time of writing)
-`edge_w="auto"` + `cat_w=0`, limit 2500. Result pending — gate resolves below.
+### T2.2v2 — edge loss auto-calibrated (MARGINAL, kernel `track1-t22v2-edge`)
+`edge_w="auto"` + `cat_w=0`, limit 2500.
+- Calibration worked as designed: `edge_w=50.95` (s=0.2039, e=0.00080 →
+  0.041 ≈ 20% of l_strong). The v1-copied 0.5 was ~100× too small — hypothesis
+  confirmed.
+- ckpt val 0.7225 (s2 ep03); teacher notably strong (0.628 final — edge term
+  seems to help teacher consistency).
+- Sweep: **0.8861 (F1 0.259, Dice 0.627)** vs catw00 0.8668 = **+0.019**.
+- **Gate: DOES NOT qualify** (>~0.02 required; 0.019 within noise, and val
+  split differs 253 vs 203 clips adding uncertainty). Logged as
+  marginal-negative, **DISCARDED permanently** — no third attempts.
+  Checkpoint not kept (Kaggle outputs retain `t1_t22v2_edge.pt` if needed).
+
+## Decision gate (resolved 2026-09-21)
+- T2.1v2 0.9298 (+0.063): **PROMOTED — new baseline.**
+- T2.2v2 0.8861 (+0.019): discarded (marginal, within gate threshold).
+- Tier 3 proceeds on **T2.1v2 config** (`use_cnn=True`, `cat_w=0`,
+  `edge_w=0`, ema 0.999, rampup 5) at `budget="full"` — no combination of
+  unproven changes, per protocol.
