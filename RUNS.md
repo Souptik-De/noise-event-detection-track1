@@ -135,3 +135,21 @@ Per protocol gate, Tier 3 `full` run is NOT auto-approved (requires a Tier 2
 win). Standing best remains **catw00 @ 0.8668** (`outputs/t1_catw00_2000.pt`).
 T2.3 regression-head stretch + Tier 3 full-budget-on-catw0 proposed as
 explicit decisions (see chat summary).
+
+## Tier 2 retries @ train_limit=2500 (user override; caps 2532, train 2500,
+val ~253 — slightly more data than the 2000-baseline, noted at the gate)
+
+### T2.1v2 — CNN branch, stage-1 freeze (PROMOTE, kernel `track1-t21v2-cnn`)
+`use_cnn=True` + `cat_w=0`. CNN+merge (26 tensors) frozen in stage 1,
+joining stage 2 at 0.1× head LR.
+- Stage 1 flat 0.5124 (WavLM+head as designed); stage 2 climbs to ckpt val
+  **0.7080** (s2 ep04). Teacher ends 0.568.
+- Sweep: **Combined 0.9298 (F1 0.290, Dice 0.640)**,
+  postproc `(0.7, 15, 0.25, 0.7)`.
+- **+0.063 vs catw00 0.8668 — far outside noise. PROMOTED as new baseline.**
+  Gain is mostly Dice (+0.053); F1 +0.010. The freeze schedule fixed the
+  drowning failure of attempt 1.
+- Kept locally: `outputs/t1_t21v2_cnn_2500.pt` (336MB — extra CNN params).
+
+### T2.2v2 — edge loss auto-calibrated (running at time of writing)
+`edge_w="auto"` + `cat_w=0`, limit 2500. Result pending — gate resolves below.
