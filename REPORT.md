@@ -228,24 +228,31 @@ Local has no GPU (`nvidia-smi` absent); `kaggle` CLI installed, auth as
 - Deps: Kaggle image + `pip install soundfile librosa huggingface_hub`
   (cell 1); `requirements.txt` for elsewhere.
 
-## 7. Open problems for the evaluating AI
-1. **Event-F1 headroom (0.247):** Dice (0.571) far exceeds F1 — classic
-   boundary-precision problem. Candidates: boundary-aware losses (v1's edge
-   term, generalized), finer output grid (v2's 40 ms CNN branch / 10 ms
-   heads), onset/offset regression heads alongside classification.
-2. **Teacher lags student (0.586 vs 0.681):** EMA 0.999 may be too slow for
-   11-epoch runs, or consistency weight (max 2.0, ramp 5) mistimed. Try
-   lower decay early, longer ramp, or teacher-at-inference anyway (v2 did).
-3. **Noisy model selection:** val = 203 gold clips; best-vs-end gap (0.681 vs
-   0.649) is within noise. Larger gold val, cross-val, or EMA-of-metrics.
-4. **Postproc saturation:** sweep top rows identical across gates; thr pegged
-   at grid max (0.7) — widen grid (higher thr, finer med/min_dur), per-clip
-   adaptive thresholds, valley-splitting (v1) for merged events.
-5. **Scale:** 2000-run used a fraction of the data (full = 20k silver/8k
-   bronze + all gold, 6+16 epochs). Straightforward next run.
-6. **Class-aware auxiliaries:** 7 category channels train but only ch0 is
-   submitted — check whether category supervision helps/hurts ch0; consider
-   class-balanced sampling or hierarchical heads.
-7. **Submission path untested:** `do_submission=False` in both runs;
-   `write_submission` needs the Track 1 test set at
-   `/kaggle/input/indoml-track1-test` and end-to-end ZIP validation.
+## 7. Open problems — resolved vs still open (post Tier 0–2, best Combined 0.8668)
+
+1. **Event-F1 headroom (0.280 after T1.2):** STILL OPEN, highest value.
+   Tested: v1 edge term as MSE-on-diffs at edge_w=0.5 → NEGATIVE (0.7719;
+   term flat at ~0.001 vs BCE ~0.15, i.e. scaled out; F1 fell 0.280→0.202).
+   Tested: v2 CNN branch fusion → NEGATIVE (0.7838; random CNN overfits ch0,
+   drowns WavLM signal in 11 epochs). Untested: ~100× edge weight (risky),
+   focal-BCE pairing (v1's original context), pretrained/slow-unfreeze CNN,
+   T2.3 onset/offset regression heads, 10 ms output grid.
+2. **Teacher lags student:** PARTLY RESOLVED. ema_decay=0.99 closes the gap
+   (0.095→0.003, teacher 0.679≈student 0.681) but Combined unchanged
+   (0.8063 vs 0.8184 ref) — discarded for Combined; finding banked for any
+   future teacher-at-inference switch. Kept decay=0.999.
+3. **Noisy model selection:** STILL OPEN. Run-to-run variance measured ≈0.011
+   (base repeat 0.8070 vs Run B 0.8184, identical data); val still 203 clips.
+   Deltas < ~0.015 untrustworthy without second seed / larger val (T3.2).
+4. **Postproc saturation:** RESOLVED (negative). 720-config extended sweep
+   (thr→0.95, min_dur→0.4) finds nothing beyond (0.7, 15, 0.12, 0.7).
+   Per-clip adaptive thresholds / valley-splitting untested.
+5. **Scale:** OPEN, cheapest expected win. Trend 0.544 (100) → 0.818 (2000);
+   full budget (20k silver/8k bronze, all gold, 6+16 epochs, ~7 h) not yet run
+   — gated behind Tier 2 win per protocol; proposed with cat_w=0 folded in.
+6. **Class-aware auxiliaries:** RESOLVED — they HURT. cat_w=0 beats full
+   weight by +0.048 (0.8668 vs 0.8184). Promoted; Tier 2 built on it.
+   (Bronze still contributes via ch0 clip-tag loss.)
+7. **Submission path:** RESOLVED (dry-run). 50-clip pseudo-test ZIP validated
+   (root JSONL, unique ids, silent `events: []`, schema). Real test-set run
+   (`do_submission=True` + `/kaggle/input/indoml-track1-test`) still pending.
