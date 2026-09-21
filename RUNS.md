@@ -69,3 +69,23 @@ One Commit, streamed once, 3 configs back-to-back on identical loaders
   consistency dynamics. Teacher-quality finding banked (useful if we ever
   switch to teacher-at-inference).
 - Kept locally: `outputs/t1_t11_ema99.pt` (teacher-competitive ckpt).
+
+## Tier 1.2 — category-auxiliary weight `cat_w` (2026-09-19, kernel `souptikde/track1-t1-catw`)
+
+New `CFG["cat_w"]` knob (default 1.0 = old behavior) scaling channels 1..7
+in `l_strong`/`l_weak`; ch0 always 1.0, `l_cons` untouched. One Commit,
+streamed once, 3 configs on identical loaders (train 2000 / val 203).
+
+| config | ckpt val (pre-sweep) | sweep Combined | F1 | Dice | postproc |
+|---|---|---|---|---|---|
+| Run B ref (cat_w=1) | 0.6808 | 0.8184 | 0.247 | 0.571 | (0.7,15,0.12,0.7) |
+| catw10 repeat (1.0) | 0.6354 | 0.8153 | 0.231 | 0.584 | (0.7,15,0.12,0.7) |
+| catw05 (0.5) | 0.5802 | 0.8092 | 0.228 | 0.581 | (0.7,15,0.12,0.7) |
+| catw00 (0.0) | **0.7098** | **0.8668** | **0.280** | **0.587** | (0.7,21,0.12,0.7) |
+
+- **PROMOTE: `cat_w=0.0` beats Run B by +0.048 Combined** (F1 +0.033, Dice
+  +0.016 — far outside ~0.011 run noise). The 7 auxiliary category channels
+  DILUTE the graded ch0 output; zeroing them also gives the best pre-sweep
+  ckpt (0.7098) seen so far. New baseline to beat: **0.8668**.
+- Note: with cat_w=0, Bronze still contributes via ch0 clip-tag weak loss.
+- Kept locally: `outputs/t1_catw00_2000.pt`. Tier 2 builds on `cat_w=0.0`.
