@@ -111,15 +111,19 @@ class WavLMSED(nn.Module):
         if self.use_cnn:
             # Log-mel on GPU from the same waveform, per-utterance standardised
             # (v-2 recipe), CNN at native 20 ms, interpolate, fuse, ReLU.
-            with torch.no_grad():
-                m = self.mel(x)                       # (B, n_mels, T_mel)
-                m = (m - m.mean(dim=(1, 2), keepdim=True)) / \
-                    (m.std(dim=(1, 2), keepdim=True) + 1e-5)
-            c = self.cnn(m)                           # (B, T_cnn, cnn_ch)
+            # Frontend runs in fp32 (autocast-exempt): v-2 trained it in fp32
+            # and fp16 STFT/power/CNN ops produced NaN losses (T2.1 first attempt).
+            amp_dev = "cuda" if x.is_cuda else "cpu"
+            with torch.autocast(amp_dev, enabled=False):
+                with torch.no_grad():             # frontend fixed (as v-2's
+                    m = self.mel(x.float())       # precomputed mels): no grad
+                    m = (m - m.mean(dim=(1, 2), keepdim=True)) / \
+                        (m.std(dim=(1, 2), keepdim=True) + 1e-5)
+                c = self.cnn(m)                   # (B, T_cnn, cnn_ch)
             if c.shape[1] != T:
                 c = F.interpolate(c.transpose(1, 2), size=T, mode="linear",
                                   align_corners=False).transpose(1, 2)
-            h = F.relu(self.merge(torch.cat([h, c], dim=-1)))
+            h = F.relu(self.merge(torch.cat([h, c.to(h.dtype)], dim=-1)))
         h, _ = self.rnn(h)
         frame = torch.sigmoid(self.strong(h))         # (B, T, n_out)
         a = self.att(h)                               # (B, T, n_out) attention logits

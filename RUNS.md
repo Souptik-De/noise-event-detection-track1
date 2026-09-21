@@ -89,3 +89,15 @@ streamed once, 3 configs on identical loaders (train 2000 / val 203).
   ckpt (0.7098) seen so far. New baseline to beat: **0.8668**.
 - Note: with cat_w=0, Bronze still contributes via ch0 clip-tag weak loss.
 - Kept locally: `outputs/t1_catw00_2000.pt`. Tier 2 builds on `cat_w=0.0`.
+
+## Tier 2.1 — CNN branch (attempt 1: NaN, kernel `souptikde/track1-t2-cnn` v1)
+
+`use_cnn=True` + `cat_w=0`, limit 2000. Result: **all losses NaN from step 0**,
+F1 0.000 — hard fail, discarded as a run.
+Diagnosis (local CPU repro): mel + CNN clean in fp32 AND bf16-autocast, so the
+prime suspect is CUDA-fp16 overflow in the torchaudio power frontend
+(power=2.0 squares STFT magnitudes; fp16 max 65504) under the train loop's
+`autocast("cuda")` — v2 trained this frontend in fp32.
+Fix: frontend (mel + standardize detached, CNN kept trainable) forced to fp32
+via `torch.autocast(dev, enabled=False)` in `WavLMSED.forward`; verified
+locally (no NaN, mel detached, CNN gets grad). Retrying below.
