@@ -48,6 +48,8 @@ CFG = dict(
     weight_decay=1e-2,
     num_workers=2,
     seed=42,
+    use_cnn=False,          # T2.1: fuse log-mel CNN branch (kernel sets True to test)
+    cnn_ch=128,             # T2.1: CNN output channels (fused 768+128 -> 768)
 )
 
 
@@ -80,6 +82,14 @@ CKPT = WORK / "t1_wavlm.pt"
 ENCODER_NAME = "microsoft/wavlm-base-plus"
 DROP_LAST_LAYERS = 2
 LR_ENC, LR_HEAD = 5e-5, 1e-3
+
+
+# ---------------------------------------------------------------------------
+# T2.1 CNN branch frontend (port of v-2's recipe): on-GPU log-mel, CNN at a
+# native 20 ms grid (time_pool=2), fused with the WavLM sequence stream.
+# ---------------------------------------------------------------------------
+N_FFT = 1024               # mel STFT size (matches v-2)
+N_MELS = 128               # mel bins (matches v-2)
 
 
 # ---------------------------------------------------------------------------
