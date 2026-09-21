@@ -94,7 +94,21 @@ def run_epochs(stu, tea, opt, sched, epochs, scaler, train_dl, val_dl, device,
             l_cons = (((f_s - f_t) ** 2) * m3).sum() / (m3.sum() * lab.shape[1] + 1e-6) \
                      + ((c_s - c_t) ** 2).mean()
 
-            loss = l_strong + l_weak + CFG["edge_w"] * l_edge + cw * l_cons
+            # T2.2v2: edge_w="auto" calibrates once (first batch with strong
+            # mass) so edge_w*l_edge ≈ 20% of l_strong. Fixed thereafter and
+            # shared across stages via state (no per-step adaptation).
+            ew = CFG["edge_w"]
+            if ew == "auto":
+                if state.get("edge_w") is None and float((strong * w).sum()) > 1e-6:
+                    with torch.no_grad():
+                        raw_ew = 0.2 * float(l_strong.detach()) / max(float(l_edge.detach()), 1e-9)
+                    state["edge_w"] = min(max(raw_ew, 1.0), 500.0)
+                    print(f"auto edge_w calibrated: {state['edge_w']:.2f} "
+                          f"(raw {raw_ew:.2f}, s {float(l_strong):.4f}, "
+                          f"e {float(l_edge):.5f})", flush=True)
+                ew = state.get("edge_w", 0.0)
+
+            loss = l_strong + l_weak + ew * l_edge + cw * l_cons
 
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
@@ -135,24 +149,38 @@ def train(train_dl, val_dl, device, stage1_epochs, stage2_epochs):
     for p in teacher.parameters():
         p.requires_grad_(False)
     scaler = GradScaler("cuda")
-    head = [p for n_, p in student.named_parameters() if not n_.startswith("enc.")]
-    state = dict(best=-1.0, gstep=0)
+    head = [p for n_, p in student.named_parameters()
+            if not n_.startswith("enc.") and not n_.startswith("cnn.")
+            and not n_.startswith("merge.")]
+    # T2.1v2: CNN-branch params train on a slower schedule so the random CNN
+    # cannot drown the pretrained WavLM stream early. Empty when use_cnn=False.
+    cnn_params = [p for n_, p in student.named_parameters()
+                  if n_.startswith("cnn.") or n_.startswith("merge.")]
+    state = dict(best=-1.0, gstep=0, edge_w=None)
 
-    # --- Stage 1: encoder frozen, train GRU + heads only ---
-    print(f"=== stage 1: encoder frozen, {stage1_epochs} epochs ===")
+    # --- Stage 1: encoder AND CNN frozen, train GRU + heads only ---
+    print(f"=== stage 1: encoder frozen, {stage1_epochs} epochs "
+          f"(+ CNN frozen: {len(cnn_params)} tensors) ===")
     for p in student.enc.parameters():
+        p.requires_grad_(False)
+    for p in cnn_params:
         p.requires_grad_(False)
     opt1 = torch.optim.AdamW(head, lr=LR_HEAD, weight_decay=CFG["weight_decay"])
     run_epochs(student, teacher, opt1, None, stage1_epochs, scaler,
                train_dl, val_dl, device, state, tag="s1 ")
 
     # --- Stage 2: unfreeze encoder with a small LR, cosine schedule ---
+    # CNN joins here at 0.1x head LR (refinement only, not representation learning).
     print(f"=== stage 2: unfrozen, enc lr {LR_ENC}, {stage2_epochs} epochs ===")
     for p in student.enc.parameters():
         p.requires_grad_(True)
-    opt2 = torch.optim.AdamW([{"params": student.enc.parameters(), "lr": LR_ENC},
-                              {"params": head, "lr": LR_HEAD * 0.3}],
-                             weight_decay=CFG["weight_decay"])
+    for p in cnn_params:
+        p.requires_grad_(True)
+    groups = [{"params": student.enc.parameters(), "lr": LR_ENC},
+              {"params": head, "lr": LR_HEAD * 0.3}]
+    if cnn_params:
+        groups.append({"params": cnn_params, "lr": LR_HEAD * 0.1})
+    opt2 = torch.optim.AdamW(groups, weight_decay=CFG["weight_decay"])
     sched2 = torch.optim.lr_scheduler.CosineAnnealingLR(
         opt2, T_max=stage2_epochs * max(1, len(train_dl)))
     run_epochs(student, teacher, opt2, sched2, stage2_epochs, scaler,
