@@ -101,3 +101,15 @@ prime suspect is CUDA-fp16 overflow in the torchaudio power frontend
 Fix: frontend (mel + standardize detached, CNN kept trainable) forced to fp32
 via `torch.autocast(dev, enabled=False)` in `WavLMSED.forward`; verified
 locally (no NaN, mel detached, CNN gets grad). Retrying below.
+
+## Tier 2.1 — CNN branch (attempt 2: finite, NEGATIVE, kernel `track1-t2-cnn` v3)
+
+`use_cnn=True` + `cat_w=0`, limit 2000, fp32 frontend. Losses finite, but:
+ckpt val 0.5583, sweep **0.7838 (F1 0.220, Dice 0.564)** vs catw00 0.8668
+(Δ=-0.083, far outside noise). Teacher flat ~0.445 all run; strong-train
+loss suspiciously low (0.12–0.16 vs ~0.5+ for catw00) while val oscillates
+0.44–0.56 — the random CNN+merge path overfits ch0 quickly and drowns the
+pretrained WavLM signal within 11 epochs.
+**Decision: DISCARD as implemented.** (A slower unfreeze schedule or
+pretrained CNN could revive it, but protocol says don't iterate
+indefinitely.) Checkpoint not kept (worse than baseline).

@@ -77,12 +77,24 @@ def run_epochs(stu, tea, opt, sched, epochs, scaler, train_dl, val_dl, device,
             # l_weak: clip-tag BCE on the attention-pooled prob (all tiers -> Bronze in).
             l_weak = (bce_pos(c_s, tags) * chw.view(1, -1)).mean()
 
+            # l_edge (T2.2, port of v-1's boundary_aware_loss): MSE between the
+            # first temporal differences of frame probs and label diffs — i.e.
+            # direct supervision of on/off EDGES, which is what Event-F1 grades.
+            # Timestamped clips only (* strong * w); chw-weighted like l_strong
+            # (with cat_w=0 this supervises ch0 edges only). Off when edge_w=0.
+            d_s = f_s[:, :, 1:] - f_s[:, :, :-1]
+            d_l = lab[:, :, 1:] - lab[:, :, :-1]
+            m_e = m3[:, :, 1:]
+            le = (((d_s - d_l) ** 2) * chw.view(1, -1, 1) * m_e).sum(dim=(1, 2)) \
+                / (m_e.sum(dim=(1, 2)) * lab.shape[1] + 1e-6)
+            l_edge = (le * strong * w).sum() / (strong * w).sum().clamp(min=1e-6)
+
             # l_cons: frame + clip MSE between student and teacher (tier-agnostic).
             f_t, c_t = f_t.float(), c_t.float()
             l_cons = (((f_s - f_t) ** 2) * m3).sum() / (m3.sum() * lab.shape[1] + 1e-6) \
                      + ((c_s - c_t) ** 2).mean()
 
-            loss = l_strong + l_weak + cw * l_cons
+            loss = l_strong + l_weak + CFG["edge_w"] * l_edge + cw * l_cons
 
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
@@ -98,13 +110,14 @@ def run_epochs(stu, tea, opt, sched, epochs, scaler, train_dl, val_dl, device,
 
             acc["s"] += float(l_strong.detach()); acc["w"] += float(l_weak.detach())
             acc["c"] += float(l_cons.detach()); acc["n"] += 1
+            acc["e"] += float(l_edge.detach())
 
         # Validate both student and teacher; save the better if it improves.
         n = max(1, acc["n"])
         ms = evaluate(stu, val_dl, device)
         mt = evaluate(tea, val_dl, device)
         print(f"{tag}ep{ep:02d} [{(time.time()-t0)/60:.1f}m] s {acc['s']/n:.3f} "
-              f"w {acc['w']/n:.3f} c {acc['c']/n:.3f} | "
+              f"w {acc['w']/n:.3f} c {acc['c']/n:.3f} e {acc['e']/n:.4f} | "
               f"stu {ms['score']:.4f} (F1 {ms['f1']:.3f} D {ms['dice']:.3f}) | "
               f"tea {mt['score']:.4f}")
         if max(ms["score"], mt["score"]) > state["best"]:

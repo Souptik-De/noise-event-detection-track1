@@ -42,6 +42,8 @@ CFG = dict(
     cat_w=1.0,              # weight of auxiliary category channels 1..7 in
                             # l_strong/l_weak (ch0 any-noise always 1.0).
                             # 1.0 = current behaviour; ablate with 0.5 / 0.0.
+    edge_w=0.0,             # T2.2: weight of v1's boundary-aware edge MSE term.
+                            # 0.0 = off (baseline); test 0.5 (v1's value).
     mixup_prob=0.5,       # probability of applying mixup to a batch
     mixup_alpha=0.2,      # Beta(alpha, alpha) mixing coefficient
     val_frac=0.1,         # 10% of gold clips held out for validation
