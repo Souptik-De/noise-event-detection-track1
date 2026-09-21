@@ -113,3 +113,25 @@ pretrained WavLM signal within 11 epochs.
 **Decision: DISCARD as implemented.** (A slower unfreeze schedule or
 pretrained CNN could revive it, but protocol says don't iterate
 indefinitely.) Checkpoint not kept (worse than baseline).
+
+## Tier 2.2 — boundary edge loss (NEGATIVE, kernel `souptikde/track1-t2-edge` v1)
+
+`edge_w=0.5` (v1's value) + `cat_w=0`, limit 2000, identical split.
+New `l_edge` = MSE on frame-prob temporal diffs (timestamped clips, chw-weighted
+→ ch0-only under cat_w=0); epoch lines gained an `e` component.
+Result: ckpt val 0.6313, sweep **0.7719 (F1 0.202, Dice 0.570)** vs catw00
+0.8668 (Δ=-0.095). **DISCARD.**
+Diagnosis: `e` flat at 0.0012–0.0013 all 11 epochs while `s` ≈ 0.12–0.16 —
+the term contributes ~0.0006 to a ~0.15 loss, i.e. scaled out of existence
+(v1 paired it with focal BCE at a different loss scale). F1 fell (0.280 →
+0.202) while Dice held, so as-added it slightly hurts boundaries. A ~100×
+weight might matter but risks destabilizing BCE training; not pursued per
+no-indefinite-iteration rule. Checkpoint not kept (worse than baseline).
+
+## Tier 2 verdict
+
+Both Tier 2 attempts negative (T2.1 CNN 0.7838, T2.2 edge 0.7719 vs 0.8668).
+Per protocol gate, Tier 3 `full` run is NOT auto-approved (requires a Tier 2
+win). Standing best remains **catw00 @ 0.8668** (`outputs/t1_catw00_2000.pt`).
+T2.3 regression-head stretch + Tier 3 full-budget-on-catw0 proposed as
+explicit decisions (see chat summary).
