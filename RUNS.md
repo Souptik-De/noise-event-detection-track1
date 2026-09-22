@@ -170,3 +170,15 @@ joining stage 2 at 0.1× head LR.
 - Tier 3 proceeds on **T2.1v2 config** (`use_cnn=True`, `cat_w=0`,
   `edge_w=0`, ema 0.999, rampup 5) at `budget="full"` — no combination of
   unproven changes, per protocol.
+
+## Tier 3 — full budget on T2.1v2 config (NEGATIVE, kernel `track1-t3-full`)
+11111 gold / 20000 silver / 8000 bronze → train 38000 / val 1111 (gold only).
+6 stage-1 + 16 stage-2 epochs at ~25–30 min/epoch (~11 h total).
+Result: ckpt val 0.6052 (s2 ep09), sweep **0.8341 (F1 0.245, Dice 0.589)**
+vs T2.1v2 0.9298 (Δ=-0.096). **DISCARD.**
+Diagnosis: at 19× data with the same 22-epoch / cosine schedule, the model
+underfits the schedule — val oscillates 0.51–0.61, best mid-stage-2, never
+converging. Epoch budget and LR schedule tuned for 2k-scale do not transfer;
+full scale needs more epochs and/or higher LRs. Val is now 1111 clips, so
+this 0.834 is a *reliable* number, not noise. Checkpoint not kept (worse
+than baseline; retained in Kaggle outputs as `t1_full_cnn.pt` if needed).
